@@ -13,6 +13,9 @@ import Meetings from "./pages/Meetings";
 import NewMeeting from "./pages/NewMeeting";
 import LiveTranslation from "./pages/LiveTranslation";
 import Integrations from "./pages/Integrations";
+import Analytics from "./pages/Analytics";
+import Team from "./pages/Team";
+import Billing from "./pages/Billing";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 import DashboardLayout from "./components/layout/DashboardLayout";
@@ -39,9 +42,9 @@ const App = () => (
               <Route path="meetings/new" element={<NewMeeting />} />
               <Route path="meetings/:meetingId/live" element={<LiveTranslation />} />
               <Route path="integrations" element={<Integrations />} />
-              <Route path="analytics" element={<div>Analytics Page</div>} />
-              <Route path="team" element={<div>Team Page</div>} />
-              <Route path="billing" element={<div>Billing Page</div>} />
+              <Route path="analytics" element={<Analytics />} />
+              <Route path="team" element={<Team />} />
+              <Route path="billing" element={<Billing />} />
               <Route path="support" element={<div>Support Page</div>} />
             </Route>
             <Route path="*" element={<NotFound />} />
