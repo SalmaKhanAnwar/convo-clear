@@ -46,8 +46,11 @@ const Header = () => {
             </div>
 
             {/* CTA Button */}
-            <Button className="btn-hero text-sm">
-              Start Free Trial
+            <Button 
+              onClick={() => window.location.href = '/auth'}
+              className="btn-hero text-sm"
+            >
+              Get Started
             </Button>
           </div>
 
@@ -67,7 +70,12 @@ const Header = () => {
               <a href="#pricing" className="text-sm font-medium text-foreground">Pricing</a>
               <a href="#use-cases" className="text-sm font-medium text-foreground">Use Cases</a>
               <a href="#login" className="text-sm font-medium text-foreground">Log In</a>
-              <Button className="btn-hero text-sm w-full">Start Free Trial</Button>
+              <Button 
+                onClick={() => window.location.href = '/auth'}
+                className="btn-hero text-sm w-full"
+              >
+                Get Started
+              </Button>
             </div>
           </div>
         )}
