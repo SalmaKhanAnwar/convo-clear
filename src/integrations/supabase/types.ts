@@ -14,6 +14,92 @@ export type Database = {
   }
   public: {
     Tables: {
+      billing_history: {
+        Row: {
+          amount: number | null
+          created_at: string
+          currency: string | null
+          id: string
+          invoice_url: string | null
+          period_end: string | null
+          period_start: string | null
+          status: string | null
+          stripe_invoice_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string
+          currency?: string | null
+          id?: string
+          invoice_url?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          status?: string | null
+          stripe_invoice_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string
+          currency?: string | null
+          id?: string
+          invoice_url?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          status?: string | null
+          stripe_invoice_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      enterprise_features: {
+        Row: {
+          api_access: boolean | null
+          created_at: string
+          custom_branding: boolean | null
+          data_retention_days: number | null
+          dedicated_support: boolean | null
+          id: string
+          sso_enabled: boolean | null
+          team_id: string | null
+          updated_at: string
+          white_label: boolean | null
+        }
+        Insert: {
+          api_access?: boolean | null
+          created_at?: string
+          custom_branding?: boolean | null
+          data_retention_days?: number | null
+          dedicated_support?: boolean | null
+          id?: string
+          sso_enabled?: boolean | null
+          team_id?: string | null
+          updated_at?: string
+          white_label?: boolean | null
+        }
+        Update: {
+          api_access?: boolean | null
+          created_at?: string
+          custom_branding?: boolean | null
+          data_retention_days?: number | null
+          dedicated_support?: boolean | null
+          id?: string
+          sso_enabled?: boolean | null
+          team_id?: string | null
+          updated_at?: string
+          white_label?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enterprise_features_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       integrations: {
         Row: {
           access_token: string | null
@@ -168,44 +254,151 @@ export type Database = {
         }
         Relationships: []
       }
+      subscribers: {
+        Row: {
+          billing_cycle_end: string | null
+          billing_cycle_start: string | null
+          created_at: string
+          email: string
+          id: string
+          stripe_customer_id: string | null
+          subscribed: boolean
+          subscription_end: string | null
+          subscription_id: string | null
+          subscription_tier: string | null
+          trial_end: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          billing_cycle_end?: string | null
+          billing_cycle_start?: string | null
+          created_at?: string
+          email: string
+          id?: string
+          stripe_customer_id?: string | null
+          subscribed?: boolean
+          subscription_end?: string | null
+          subscription_id?: string | null
+          subscription_tier?: string | null
+          trial_end?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          billing_cycle_end?: string | null
+          billing_cycle_start?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          stripe_customer_id?: string | null
+          subscribed?: boolean
+          subscription_end?: string | null
+          subscription_id?: string | null
+          subscription_tier?: string | null
+          trial_end?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       teams: {
         Row: {
           created_at: string
+          features: Json | null
           id: string
           max_members: number | null
           max_minutes: number | null
+          monthly_minutes_limit: number | null
           name: string
           owner_id: string
           plan_type: string | null
+          subscription_tier: string | null
           trial_end_date: string | null
           trial_start_date: string | null
           updated_at: string
+          users_limit: number | null
         }
         Insert: {
           created_at?: string
+          features?: Json | null
           id?: string
           max_members?: number | null
           max_minutes?: number | null
+          monthly_minutes_limit?: number | null
           name: string
           owner_id: string
           plan_type?: string | null
+          subscription_tier?: string | null
           trial_end_date?: string | null
           trial_start_date?: string | null
           updated_at?: string
+          users_limit?: number | null
         }
         Update: {
           created_at?: string
+          features?: Json | null
           id?: string
           max_members?: number | null
           max_minutes?: number | null
+          monthly_minutes_limit?: number | null
           name?: string
           owner_id?: string
           plan_type?: string | null
+          subscription_tier?: string | null
           trial_end_date?: string | null
           trial_start_date?: string | null
           updated_at?: string
+          users_limit?: number | null
         }
         Relationships: []
+      }
+      usage_analytics: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          languages_used: string[] | null
+          meetings_count: number | null
+          minutes_used: number | null
+          platforms_used: string[] | null
+          team_id: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          date?: string
+          id?: string
+          languages_used?: string[] | null
+          meetings_count?: number | null
+          minutes_used?: number | null
+          platforms_used?: string[] | null
+          team_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          languages_used?: string[] | null
+          meetings_count?: number | null
+          minutes_used?: number | null
+          platforms_used?: string[] | null
+          team_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "usage_analytics_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
