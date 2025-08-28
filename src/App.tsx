@@ -9,6 +9,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
+import Meetings from "./pages/Meetings";
+import NewMeeting from "./pages/NewMeeting";
+import LiveTranslation from "./pages/LiveTranslation";
+import Integrations from "./pages/Integrations";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 import DashboardLayout from "./components/layout/DashboardLayout";
@@ -31,8 +35,10 @@ const App = () => (
               </ProtectedRoute>
             }>
               <Route index element={<Dashboard />} />
-              <Route path="meetings" element={<div>Meetings Page</div>} />
-              <Route path="integrations" element={<div>Integrations Page</div>} />
+              <Route path="meetings" element={<Meetings />} />
+              <Route path="meetings/new" element={<NewMeeting />} />
+              <Route path="meetings/:meetingId/live" element={<LiveTranslation />} />
+              <Route path="integrations" element={<Integrations />} />
               <Route path="analytics" element={<div>Analytics Page</div>} />
               <Route path="team" element={<div>Team Page</div>} />
               <Route path="billing" element={<div>Billing Page</div>} />
