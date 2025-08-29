@@ -14,6 +14,56 @@ export type Database = {
   }
   public: {
     Tables: {
+      audio_chunks: {
+        Row: {
+          audio_data: string
+          bot_session_id: string
+          chunk_sequence: number
+          created_at: string
+          duration_ms: number
+          id: string
+          language: string
+          processing_status: string
+          transcription: string | null
+          translated_audio_data: string | null
+          translation: string | null
+        }
+        Insert: {
+          audio_data: string
+          bot_session_id: string
+          chunk_sequence: number
+          created_at?: string
+          duration_ms: number
+          id?: string
+          language: string
+          processing_status?: string
+          transcription?: string | null
+          translated_audio_data?: string | null
+          translation?: string | null
+        }
+        Update: {
+          audio_data?: string
+          bot_session_id?: string
+          chunk_sequence?: number
+          created_at?: string
+          duration_ms?: number
+          id?: string
+          language?: string
+          processing_status?: string
+          transcription?: string | null
+          translated_audio_data?: string | null
+          translation?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audio_chunks_bot_session_id_fkey"
+            columns: ["bot_session_id"]
+            isOneToOne: false
+            referencedRelation: "bot_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       billing_history: {
         Row: {
           amount: number | null
@@ -50,6 +100,66 @@ export type Database = {
           status?: string | null
           stripe_invoice_id?: string | null
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      bot_sessions: {
+        Row: {
+          audio_processing_active: boolean | null
+          bot_participant_id: string | null
+          connection_quality: Json | null
+          created_at: string
+          ended_at: string | null
+          error_message: string | null
+          id: string
+          meeting_id: string
+          meeting_url: string
+          platform: string
+          source_language: string
+          started_at: string | null
+          status: string
+          target_language: string
+          team_id: string
+          updated_at: string
+          voice_id: string
+        }
+        Insert: {
+          audio_processing_active?: boolean | null
+          bot_participant_id?: string | null
+          connection_quality?: Json | null
+          created_at?: string
+          ended_at?: string | null
+          error_message?: string | null
+          id?: string
+          meeting_id: string
+          meeting_url: string
+          platform: string
+          source_language?: string
+          started_at?: string | null
+          status?: string
+          target_language?: string
+          team_id: string
+          updated_at?: string
+          voice_id?: string
+        }
+        Update: {
+          audio_processing_active?: boolean | null
+          bot_participant_id?: string | null
+          connection_quality?: Json | null
+          created_at?: string
+          ended_at?: string | null
+          error_message?: string | null
+          id?: string
+          meeting_id?: string
+          meeting_url?: string
+          platform?: string
+          source_language?: string
+          started_at?: string | null
+          status?: string
+          target_language?: string
+          team_id?: string
+          updated_at?: string
+          voice_id?: string
         }
         Relationships: []
       }
@@ -149,6 +259,7 @@ export type Database = {
       }
       meetings: {
         Row: {
+          bot_session_id: string | null
           created_at: string
           duration_minutes: number | null
           end_time: string | null
@@ -167,6 +278,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          bot_session_id?: string | null
           created_at?: string
           duration_minutes?: number | null
           end_time?: string | null
@@ -185,6 +297,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          bot_session_id?: string | null
           created_at?: string
           duration_minutes?: number | null
           end_time?: string | null
@@ -203,6 +316,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "meetings_bot_session_id_fkey"
+            columns: ["bot_session_id"]
+            isOneToOne: false
+            referencedRelation: "bot_sessions"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "meetings_team_id_fkey"
             columns: ["team_id"]
@@ -352,6 +472,53 @@ export type Database = {
           users_limit?: number | null
         }
         Relationships: []
+      }
+      translation_logs: {
+        Row: {
+          bot_session_id: string
+          confidence_score: number | null
+          created_at: string
+          id: string
+          model_used: string
+          processing_time_ms: number
+          source_language: string
+          source_text: string
+          target_language: string
+          translated_text: string
+        }
+        Insert: {
+          bot_session_id: string
+          confidence_score?: number | null
+          created_at?: string
+          id?: string
+          model_used?: string
+          processing_time_ms: number
+          source_language: string
+          source_text: string
+          target_language: string
+          translated_text: string
+        }
+        Update: {
+          bot_session_id?: string
+          confidence_score?: number | null
+          created_at?: string
+          id?: string
+          model_used?: string
+          processing_time_ms?: number
+          source_language?: string
+          source_text?: string
+          target_language?: string
+          translated_text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "translation_logs_bot_session_id_fkey"
+            columns: ["bot_session_id"]
+            isOneToOne: false
+            referencedRelation: "bot_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       usage_analytics: {
         Row: {

@@ -13,6 +13,15 @@ verify_jwt = true
 [functions.customer-portal]
 verify_jwt = true
 
+[functions.bot-orchestrator]
+verify_jwt = true
+
+[functions.audio-processor]
+verify_jwt = false
+
+[functions.bot-status]
+verify_jwt = true
+
 [db]
 port = 54322
 
