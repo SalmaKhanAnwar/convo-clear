@@ -1,454 +1,536 @@
-import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Slider } from '@/components/ui/slider';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
+import VoiceInterface from '@/components/VoiceInterface';
+import { MeetingBot } from '@/utils/RealtimeAudio';
 import { 
-  Play, 
-  Pause, 
-  Square, 
-  Volume2, 
-  VolumeX,
+  ArrowLeft, 
+  Globe, 
   Mic, 
-  MicOff,
+  Volume2, 
   Settings,
+  Bot,
   Users,
-  Globe,
-  Activity,
-  AlertCircle,
-  Download,
-  PhoneOff,
-  Subtitles,
-  RotateCcw
+  MessageSquare
 } from 'lucide-react';
-import { useToast } from '@/components/ui/use-toast';
 
-interface Meeting {
-  id: string;
-  title: string;
-  platform: string;
-  languages_used: string[];
-  status: string;
-  participant_count: number;
-}
+const VOICES = [
+  { id: 'alloy', name: 'Alloy', description: 'Neutral, balanced' },
+  { id: 'echo', name: 'Echo', description: 'Calm, professional' },
+  { id: 'shimmer', name: 'Shimmer', description: 'Warm, friendly' },
+  { id: 'ash', name: 'Ash', description: 'Clear, articulate' },
+  { id: 'ballad', name: 'Ballad', description: 'Smooth, conversational' },
+  { id: 'coral', name: 'Coral', description: 'Bright, energetic' },
+  { id: 'sage', name: 'Sage', description: 'Wise, measured' },
+  { id: 'verse', name: 'Verse', description: 'Expressive, dynamic' }
+];
 
-interface TranslationMessage {
-  id: string;
-  speaker: string;
-  original: string;
-  translated: string;
-  language: string;
-  timestamp: Date;
-  confidence: number;
-}
-
-interface Participant {
-  id: string;
-  name: string;
-  language: string;
-  isActive: boolean;
-  audioLevel: number;
-}
+const LANGUAGES = [
+  { code: 'en', name: 'English' },
+  { code: 'es', name: 'Spanish' },
+  { code: 'fr', name: 'French' },
+  { code: 'de', name: 'German' },
+  { code: 'it', name: 'Italian' },
+  { code: 'pt', name: 'Portuguese' },
+  { code: 'ru', name: 'Russian' },
+  { code: 'ja', name: 'Japanese' },
+  { code: 'ko', name: 'Korean' },
+  { code: 'zh', name: 'Chinese' },
+  { code: 'ar', name: 'Arabic' },
+  { code: 'hi', name: 'Hindi' },
+  { code: 'tr', name: 'Turkish' },
+  { code: 'pl', name: 'Polish' },
+  { code: 'nl', name: 'Dutch' },
+  { code: 'sv', name: 'Swedish' },
+  { code: 'da', name: 'Danish' },
+  { code: 'no', name: 'Norwegian' },
+  { code: 'fi', name: 'Finnish' }
+];
 
 const LiveTranslation = () => {
-  const { meetingId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
-  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Meeting data
-  const [meeting, setMeeting] = useState<Meeting | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [connectionQuality, setConnectionQuality] = useState<'excellent' | 'good' | 'poor'>('good');
-  
-  // Translation state
+  // Meeting Configuration
+  const [meetingUrl, setMeetingUrl] = useState('');
+  const [platform, setPlatform] = useState<'zoom' | 'meet' | 'teams'>('zoom');
+  const [sourceLanguage, setSourceLanguage] = useState('en');
+  const [targetLanguage, setTargetLanguage] = useState('es');
+  const [selectedVoice, setSelectedVoice] = useState('alloy');
+
+  // Bot State
+  const [botSessionId, setBotSessionId] = useState<string | null>(null);
+  const [botStatus, setBotStatus] = useState<'idle' | 'connecting' | 'active' | 'error'>('idle');
+  const [meetingBot, setMeetingBot] = useState<MeetingBot | null>(null);
+
+  // Live Translation State
   const [isTranslating, setIsTranslating] = useState(false);
-  const [messages, setMessages] = useState<TranslationMessage[]>([]);
-  const [participants, setParticipants] = useState<Participant[]>([]);
-  const [currentSpeaker, setCurrentSpeaker] = useState<string | null>(null);
-  
-  // Audio controls
-  const [volume, setVolume] = useState([80]);
-  const [isMuted, setIsMuted] = useState(false);
-  const [showSubtitles, setShowSubtitles] = useState(true);
-  const [isRecording, setIsRecording] = useState(false);
-  
-  // Real-time stats
-  const [latency, setLatency] = useState(150); // ms
-  const [accuracy, setAccuracy] = useState(92); // %
-  const [uptime, setUptime] = useState(0); // seconds
+  const [transcripts, setTranscripts] = useState<Array<{
+    id: string;
+    original: string;
+    translated: string;
+    timestamp: Date;
+    language: string;
+  }>>([]);
 
   useEffect(() => {
-    if (meetingId) {
-      fetchMeetingData();
-      connectToMeeting();
+    return () => {
+      // Cleanup on unmount
+      if (meetingBot) {
+        meetingBot.disconnect();
+      }
+    };
+  }, [meetingBot]);
+
+  const handleStartBot = async () => {
+    if (!meetingUrl.trim()) {
+      toast({
+        title: "Meeting URL Required",
+        description: "Please enter a meeting URL to continue",
+        variant: "destructive",
+      });
+      return;
     }
-  }, [meetingId]);
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  const fetchMeetingData = async () => {
     try {
-      const { data, error } = await supabase
+      setBotStatus('connecting');
+      
+      // Create a meeting record first
+      const { data: meeting, error: meetingError } = await supabase
         .from('meetings')
-        .select('*')
-        .eq('id', meetingId)
+        .insert({
+          title: `Live Translation Session - ${new Date().toLocaleString()}`,
+          platform,
+          meeting_url: meetingUrl,
+          host_id: user?.id,
+          team_id: user?.user_metadata?.team_id,
+          status: 'live',
+          start_time: new Date().toISOString()
+        })
+        .select()
         .single();
 
-      if (error) throw error;
-      setMeeting(data);
+      if (meetingError) {
+        throw new Error(`Failed to create meeting: ${meetingError.message}`);
+      }
+
+      // Start the bot via bot-orchestrator
+      const { data: botResult, error: botError } = await supabase.functions.invoke(
+        'bot-orchestrator',
+        {
+          body: {
+            meetingUrl,
+            platform,
+            sourceLanguage,
+            targetLanguage,
+            voiceId: selectedVoice,
+            meetingId: meeting.id
+          }
+        }
+      );
+
+      if (botError) {
+        throw new Error(`Failed to start bot: ${botError.message}`);
+      }
+
+      setBotSessionId(botResult.botSessionId);
+      
+      // Connect to the meeting bot WebSocket
+      const bot = new MeetingBot(
+        (message) => handleBotMessage(message),
+        (error) => {
+          console.error('Bot error:', error);
+          setBotStatus('error');
+          toast({
+            title: "Bot Error",
+            description: error,
+            variant: "destructive",
+          });
+        }
+      );
+
+      await bot.connect(botResult.botSessionId);
+      setMeetingBot(bot);
+      setBotStatus('active');
+
+      toast({
+        title: "Bot Started",
+        description: "MeetingLingo bot is now joining your meeting",
+      });
+
     } catch (error) {
-      console.error('Error fetching meeting:', error);
+      console.error('Error starting bot:', error);
+      setBotStatus('error');
+      toast({
+        title: "Failed to Start Bot",
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleStopBot = async () => {
+    try {
+      if (meetingBot) {
+        meetingBot.disconnect();
+        setMeetingBot(null);
+      }
+
+      if (botSessionId) {
+        await supabase.functions.invoke('bot-status', {
+          body: { action: 'stop' }
+        });
+      }
+
+      setBotStatus('idle');
+      setBotSessionId(null);
+      setIsTranslating(false);
+
+      toast({
+        title: "Bot Stopped",
+        description: "MeetingLingo bot has left the meeting",
+      });
+
+    } catch (error) {
+      console.error('Error stopping bot:', error);
       toast({
         title: "Error",
-        description: "Failed to load meeting data.",
-        variant: "destructive"
+        description: "Failed to stop bot properly",
+        variant: "destructive",
       });
     }
   };
 
-  const connectToMeeting = async () => {
-    // Simulate connection process
-    setIsConnected(true);
-    
-    // Mock participants
-    setParticipants([
-      { id: '1', name: 'John Smith', language: 'English', isActive: false, audioLevel: 0 },
-      { id: '2', name: 'Maria García', language: 'Spanish', isActive: true, audioLevel: 65 },
-      { id: '3', name: 'Pierre Dubois', language: 'French', isActive: false, audioLevel: 0 }
-    ]);
+  const handleBotMessage = (message: any) => {
+    console.log('Bot message:', message.type);
 
-    // Mock some initial messages
-    setTimeout(() => {
-      addTranslationMessage({
-        speaker: 'Maria García',
-        original: 'Hola, ¿podemos empezar la presentación?',
-        translated: 'Hello, can we start the presentation?',
-        language: 'es → en',
-        confidence: 0.94
-      });
-    }, 2000);
-  };
+    switch (message.type) {
+      case 'initialized':
+        setBotStatus('active');
+        break;
 
-  const addTranslationMessage = (msg: Omit<TranslationMessage, 'id' | 'timestamp'>) => {
-    const newMessage: TranslationMessage = {
-      ...msg,
-      id: Date.now().toString(),
-      timestamp: new Date()
-    };
-    setMessages(prev => [...prev, newMessage]);
-  };
+      case 'ai_connected':
+        setIsTranslating(true);
+        break;
 
-  const toggleTranslation = () => {
-    setIsTranslating(!isTranslating);
-    
-    if (!isTranslating) {
-      // Start translating
-      toast({
-        title: "Translation Started",
-        description: "Real-time translation is now active."
-      });
-      
-      // Simulate incoming translations
-      const interval = setInterval(() => {
-        if (Math.random() > 0.7) { // 30% chance of new message
-          const messages = [
-            {
-              speaker: 'John Smith',
-              original: 'Thank you for joining today\'s meeting.',
-              translated: 'Gracias por unirse a la reunión de hoy.',
-              language: 'en → es',
-              confidence: 0.96
-            },
-            {
-              speaker: 'Maria García',
-              original: '¿Tienen alguna pregunta sobre el proyecto?',
-              translated: 'Do you have any questions about the project?',
-              language: 'es → en',
-              confidence: 0.91
-            }
-          ];
-          const randomMsg = messages[Math.floor(Math.random() * messages.length)];
-          addTranslationMessage(randomMsg);
+      case 'transcript_delta':
+        // Handle live transcript updates
+        break;
+
+      case 'translated_audio_delta':
+        // Audio is being played by the bot
+        break;
+
+      case 'translation_complete':
+        // Add completed translation to transcripts
+        if (message.transcription && message.translation) {
+          const newTranscript = {
+            id: Date.now().toString(),
+            original: message.transcription,
+            translated: message.translation,
+            timestamp: new Date(),
+            language: `${sourceLanguage} → ${targetLanguage}`
+          };
+          setTranscripts(prev => [newTranscript, ...prev].slice(0, 50)); // Keep last 50
         }
-      }, 5000);
+        break;
 
-      return () => clearInterval(interval);
-    } else {
-      toast({
-        title: "Translation Paused",
-        description: "Real-time translation has been paused."
-      });
+      case 'translation_error':
+        toast({
+          title: "Translation Error",
+          description: message.error,
+          variant: "destructive",
+        });
+        break;
+
+      default:
+        console.log('Unhandled bot message:', message.type);
     }
   };
 
-  const endMeeting = async () => {
-    try {
-      await supabase
-        .from('meetings')
-        .update({ status: 'completed', end_time: new Date().toISOString() })
-        .eq('id', meetingId);
+  const handleLanguageSwap = () => {
+    const temp = sourceLanguage;
+    setSourceLanguage(targetLanguage);
+    setTargetLanguage(temp);
 
-      toast({
-        title: "Meeting Ended",
-        description: "Translation session has been completed."
-      });
-
-      navigate('/dashboard/meetings');
-    } catch (error) {
-      console.error('Error ending meeting:', error);
+    // Update bot if active
+    if (meetingBot && botStatus === 'active') {
+      meetingBot.updateLanguages(targetLanguage, temp);
     }
   };
 
-  const getConfidenceColor = (confidence: number) => {
-    if (confidence >= 0.9) return 'text-green-600';
-    if (confidence >= 0.75) return 'text-yellow-600';
-    return 'text-red-600';
+  const getSourceLanguageName = () => {
+    return LANGUAGES.find(lang => lang.code === sourceLanguage)?.name || sourceLanguage;
   };
 
-  const getConnectionBadge = () => {
-    const variants = {
-      excellent: { color: 'bg-green-500', text: 'Excellent' },
-      good: { color: 'bg-yellow-500', text: 'Good' },
-      poor: { color: 'bg-red-500', text: 'Poor' }
-    };
-    const variant = variants[connectionQuality];
-    
-    return (
-      <div className="flex items-center gap-2">
-        <div className={`w-2 h-2 rounded-full ${variant.color}`} />
-        <span className="text-sm">{variant.text}</span>
-      </div>
-    );
+  const getTargetLanguageName = () => {
+    return LANGUAGES.find(lang => lang.code === targetLanguage)?.name || targetLanguage;
   };
-
-  if (!meeting) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-center">
-          <Activity className="w-8 h-8 animate-spin mx-auto mb-4 text-muted-foreground" />
-          <p>Loading meeting...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="h-screen flex flex-col bg-background">
+    <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="border-b bg-card p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div>
-              <h1 className="font-semibold">{meeting.title}</h1>
-              <p className="text-sm text-muted-foreground">
-                {meeting.platform} • {participants.length} participants
-              </p>
-            </div>
-            <Badge variant={isTranslating ? "default" : "secondary"}>
-              {isTranslating ? 'Translating' : 'Paused'}
-            </Badge>
-          </div>
-          
-          <div className="flex items-center gap-4">
-            {getConnectionBadge()}
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Activity className="w-4 h-4" />
-              <span>{latency}ms</span>
-            </div>
-            <Button variant="destructive" onClick={endMeeting}>
-              <PhoneOff className="w-4 h-4 mr-2" />
-              End Session
-            </Button>
-          </div>
+      <div className="flex items-center gap-4">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate('/dashboard')}
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back to Dashboard
+        </Button>
+        
+        <div>
+          <h1 className="text-2xl font-bold">Live Translation</h1>
+          <p className="text-muted-foreground">
+            Real-time meeting translation with MeetingLingo bot
+          </p>
         </div>
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
-        {/* Main Translation View */}
-        <div className="flex-1 flex flex-col">
-          {/* Translation Messages */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-4">
-            {messages.length === 0 ? (
-              <div className="flex items-center justify-center h-full">
-                <div className="text-center">
-                  <Mic className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="font-medium mb-2">Waiting for speech...</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Start speaking to see real-time translations appear here
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <>
-                {messages.map((message) => (
-                  <div key={message.id} className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-xs">
-                          {message.speaker}
-                        </Badge>
-                        <Badge variant="secondary" className="text-xs">
-                          {message.language}
-                        </Badge>
-                        <span className={`text-xs font-medium ${getConfidenceColor(message.confidence)}`}>
-                          {Math.round(message.confidence * 100)}%
-                        </span>
-                      </div>
-                      <span className="text-xs text-muted-foreground">
-                        {message.timestamp.toLocaleTimeString()}
-                      </span>
-                    </div>
-                    
-                    <Card className="p-4">
-                      <div className="space-y-2">
-                        <div className="text-sm text-muted-foreground">
-                          <strong>Original:</strong> {message.original}
-                        </div>
-                        <div className="text-base font-medium">
-                          <strong>Translation:</strong> {message.translated}
-                        </div>
-                      </div>
-                    </Card>
-                  </div>
-                ))}
-                <div ref={messagesEndRef} />
-              </>
-            )}
-          </div>
-
-          {/* Controls */}
-          <div className="border-t bg-card p-4">
-            <div className="flex items-center justify-center gap-4">
-              <Button
-                size="lg"
-                onClick={toggleTranslation}
-                className={isTranslating ? 'bg-red-500 hover:bg-red-600' : 'btn-hero'}
-              >
-                {isTranslating ? (
-                  <>
-                    <Pause className="w-5 h-5 mr-2" />
-                    Pause Translation
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-5 h-5 mr-2" />
-                    Start Translation
-                  </>
-                )}
-              </Button>
-              
-              <Button
-                variant="outline"
-                onClick={() => setIsMuted(!isMuted)}
-              >
-                {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-              </Button>
-              
-              <div className="flex items-center gap-2">
-                <Volume2 className="w-4 h-4" />
-                <Slider
-                  value={volume}
-                  onValueChange={setVolume}
-                  max={100}
-                  step={1}
-                  className="w-20"
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Configuration Panel */}
+        <div className="lg:col-span-1 space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Settings className="w-5 h-5" />
+                Meeting Setup
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="meetingUrl">Meeting URL</Label>
+                <Input
+                  id="meetingUrl"
+                  placeholder="https://zoom.us/j/123456789"
+                  value={meetingUrl}
+                  onChange={(e) => setMeetingUrl(e.target.value)}
+                  disabled={botStatus !== 'idle'}
                 />
               </div>
-              
+
+              <div className="space-y-2">
+                <Label htmlFor="platform">Platform</Label>
+                <Select 
+                  value={platform} 
+                  onValueChange={(value) => setPlatform(value as any)}
+                  disabled={botStatus !== 'idle'}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="zoom">Zoom</SelectItem>
+                    <SelectItem value="meet">Google Meet</SelectItem>
+                    <SelectItem value="teams">Microsoft Teams</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-2">
+                  <Label>From</Label>
+                  <Select 
+                    value={sourceLanguage} 
+                    onValueChange={setSourceLanguage}
+                    disabled={botStatus === 'connecting'}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {LANGUAGES.map(lang => (
+                        <SelectItem key={lang.code} value={lang.code}>
+                          {lang.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>To</Label>
+                  <Select 
+                    value={targetLanguage} 
+                    onValueChange={setTargetLanguage}
+                    disabled={botStatus === 'connecting'}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {LANGUAGES.map(lang => (
+                        <SelectItem key={lang.code} value={lang.code}>
+                          {lang.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
               <Button
                 variant="outline"
-                onClick={() => setIsRecording(!isRecording)}
-                className={isRecording ? 'text-red-600' : ''}
+                size="sm"
+                onClick={handleLanguageSwap}
+                className="w-full"
+                disabled={botStatus === 'connecting'}
               >
-                <div className={`w-3 h-3 rounded-full mr-2 ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-muted-foreground'}`} />
-                {isRecording ? 'Recording' : 'Record'}
+                <Globe className="w-4 h-4 mr-2" />
+                Swap Languages
               </Button>
-            </div>
-          </div>
+
+              <div className="space-y-2">
+                <Label>Voice</Label>
+                <Select 
+                  value={selectedVoice} 
+                  onValueChange={setSelectedVoice}
+                  disabled={botStatus === 'connecting'}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {VOICES.map(voice => (
+                      <SelectItem key={voice.id} value={voice.id}>
+                        <div>
+                          <div className="font-medium">{voice.name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {voice.description}
+                          </div>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Bot Status */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Bot className="w-5 h-5" />
+                Bot Status
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Badge 
+                  variant={
+                    botStatus === 'active' ? 'default' : 
+                    botStatus === 'connecting' ? 'secondary' : 
+                    botStatus === 'error' ? 'destructive' : 
+                    'outline'
+                  }
+                >
+                  {botStatus === 'active' && '🟢'}
+                  {botStatus === 'connecting' && '🟡'}
+                  {botStatus === 'error' && '🔴'}
+                  {botStatus === 'idle' && '⚪'}
+                  {botStatus.charAt(0).toUpperCase() + botStatus.slice(1)}
+                </Badge>
+                
+                {isTranslating && (
+                  <Badge variant="secondary">
+                    <Volume2 className="w-3 h-3 mr-1" />
+                    Translating
+                  </Badge>
+                )}
+              </div>
+
+              <div className="text-sm text-muted-foreground">
+                {botStatus === 'idle' && 'Ready to join meeting'}
+                {botStatus === 'connecting' && 'Joining meeting...'}
+                {botStatus === 'active' && `Translating ${getSourceLanguageName()} → ${getTargetLanguageName()}`}
+                {botStatus === 'error' && 'Error occurred - check settings'}
+              </div>
+
+              {botStatus === 'idle' ? (
+                <Button 
+                  onClick={handleStartBot}
+                  className="w-full"
+                  disabled={!meetingUrl.trim()}
+                >
+                  <Bot className="w-4 h-4 mr-2" />
+                  Start Bot
+                </Button>
+              ) : (
+                <Button 
+                  onClick={handleStopBot}
+                  variant="destructive"
+                  className="w-full"
+                >
+                  Stop Bot
+                </Button>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Sidebar */}
-        <div className="w-80 border-l bg-card">
-          {/* Participants */}
-          <div className="p-4 border-b">
-            <h3 className="font-medium flex items-center gap-2 mb-3">
-              <Users className="w-4 h-4" />
-              Participants ({participants.length})
-            </h3>
-            <div className="space-y-2">
-              {participants.map((participant) => (
-                <div key={participant.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${participant.isActive ? 'bg-green-500' : 'bg-muted-foreground'}`} />
-                    <div>
-                      <p className="text-sm font-medium">{participant.name}</p>
-                      <p className="text-xs text-muted-foreground">{participant.language}</p>
-                    </div>
-                  </div>
-                  {participant.isActive && (
-                    <div className="flex items-center gap-1">
-                      <div className="w-1 bg-green-500 rounded-full animate-pulse" style={{ height: `${Math.max(4, participant.audioLevel / 5)}px` }} />
-                      <div className="w-1 bg-green-500 rounded-full animate-pulse" style={{ height: `${Math.max(4, (participant.audioLevel + 10) / 5)}px` }} />
-                      <div className="w-1 bg-green-500 rounded-full animate-pulse" style={{ height: `${Math.max(4, (participant.audioLevel - 5) / 5)}px` }} />
-                    </div>
-                  )}
+        {/* Main Content */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Voice Interface for Testing */}
+          {botStatus === 'idle' && (
+            <VoiceInterface
+              instructions={`Translate from ${getSourceLanguageName()} to ${getTargetLanguageName()}`}
+              voice={selectedVoice}
+              sourceLanguage={getSourceLanguageName()}
+              targetLanguage={getTargetLanguageName()}
+              onTranscript={(text) => console.log('Transcript:', text)}
+              onTranslation={(text) => console.log('Translation:', text)}
+            />
+          )}
+
+          {/* Live Translation Feed */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MessageSquare className="w-5 h-5" />
+                Live Translation Feed
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {transcripts.length === 0 ? (
+                <div className="text-center text-muted-foreground py-8">
+                  {botStatus === 'active' 
+                    ? 'Waiting for speech to translate...' 
+                    : 'Start the bot to see live translations'
+                  }
                 </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Settings */}
-          <div className="p-4 border-b">
-            <h3 className="font-medium flex items-center gap-2 mb-3">
-              <Settings className="w-4 h-4" />
-              Settings
-            </h3>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="subtitles" className="text-sm">Show Subtitles</Label>
-                <Switch 
-                  id="subtitles"
-                  checked={showSubtitles}
-                  onCheckedChange={setShowSubtitles}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Statistics */}
-          <div className="p-4">
-            <h3 className="font-medium flex items-center gap-2 mb-3">
-              <Activity className="w-4 h-4" />
-              Live Stats
-            </h3>
-            <div className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Latency</span>
-                <span className="text-sm font-medium">{latency}ms</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Accuracy</span>
-                <span className="text-sm font-medium">{accuracy}%</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Uptime</span>
-                <span className="text-sm font-medium">{Math.floor(uptime / 60)}m {uptime % 60}s</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Messages</span>
-                <span className="text-sm font-medium">{messages.length}</span>
-              </div>
-            </div>
-          </div>
+              ) : (
+                <div className="space-y-4 max-h-[400px] overflow-y-auto">
+                  {transcripts.map((transcript) => (
+                    <div key={transcript.id} className="space-y-2 p-3 bg-muted rounded-lg">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>{transcript.language}</span>
+                        <span>{transcript.timestamp.toLocaleTimeString()}</span>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium">
+                          "{transcript.original}"
+                        </p>
+                        <p className="text-sm text-primary">
+                          "{transcript.translated}"
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
