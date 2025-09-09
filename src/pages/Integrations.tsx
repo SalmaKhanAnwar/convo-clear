@@ -43,7 +43,7 @@ const Integrations = () => {
     try {
       const { data, error } = await supabase
         .from('integrations')
-        .select('*')
+        .select('id, platform, is_connected, connected_at, connected_by, team_id, created_at, updated_at')
         .order('platform');
 
       if (error) throw error;
